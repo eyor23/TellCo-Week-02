@@ -20,26 +20,27 @@ Follow these steps to set up the project:
 1. **Clone the repository**:
     git clone https://github.com/your-repository/tellco-data-analysis.git
     cd tellco-data-analysis
-    ```
+
 
 2. **Create a virtual environment** (optional but recommended):
+
     python -m venv venv
     source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-    ```
+
 
 3. **Install dependencies**:
+
     pip install -r requirements.txt
-    ```
+
 
 4. **Set up environment variables**:
     Create a `.env` file in the root directory of the project and add your database credentials:
-    ```
+
     DB_HOST=your_db_host
     DB_PORT=your_db_port
     DB_NAME=your_db_name
     DB_USER=your_db_user
     DB_PASSWORD=your_db_password
-    ```
 
 ## Usage
 
@@ -47,9 +48,18 @@ Follow these steps to set up the project:
 
 To run the analysis, execute the main script which performs the following steps:
 1. Load and preprocess the data
-2. Perform EDA
+2. Perform correlation analysis and visualize the correlation matrix
+3. Perform dimensionality reduction using PCA and visualize the results
+4. Aggregate engagement metrics per customer
+5. Normalize metrics and classify customers using K-Means clustering
+6. Compute statistics for each cluster
+7. Aggregate user total traffic per application
+8. Plot the top 3 most used applications
+9. Determine the optimized value of k using the elbow method
 
-Example usage in your analysis notebook:
+Example usage in your main notebook:
+
+```python
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -57,8 +67,16 @@ import matplotlib.pyplot as plt
 from sqlalchemy import create_engine
 import os
 from dotenv import load_dotenv
-from correlational_anal import correlation_analysis
-from dimensionality_reduction import dimensionality_reduction
+from engagement_analysis import (
+    aggregate_metrics,
+    top_customers,
+    normalize_and_cluster,
+    compute_cluster_stats,
+    user_traffic_per_app,
+    top_users_per_application,
+    plot_top_apps,
+    elbow_method
+)
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -76,7 +94,7 @@ connection_string = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{
 # Create the engine
 engine = create_engine(connection_string)
 
-# Update the query with exact column names and without table prefix
+# Load the data from the database
 query = """
 SELECT "MSISDN/Number" AS user,
        "Bearer Id",
@@ -92,10 +110,48 @@ SELECT "MSISDN/Number" AS user,
        "Other DL (Bytes)"
 FROM xdr_data;
 """
-
-# Load the cleaned data from the database
 data = pd.read_sql_query(query, engine)
 
-#### Dependencies
-The project dependencies are listed in the requirements.txt file. To install them, run:
-pip install -r requirements.txt
+# Aggregate metrics per customer
+aggregated_data = aggregate_metrics(data)
+
+# Report top 10 customers per engagement metric
+top_customers_data = top_customers(aggregated_data)
+print("Top 10 Customers by Session Frequency:\n", top_customers_data['frequency'])
+print("Top 10 Customers by Total Duration:\n", top_customers_data['duration'])
+print("Top 10 Customers by Total Download:\n", top_customers_data['download'])
+print("Top 10 Customers by Total Upload:\n", top_customers_data['upload'])
+
+# Normalize engagement metrics and run K-Means clustering
+aggregated_data, scaler, kmeans = normalize_and_cluster(aggregated_data)
+
+# Compute statistics for each cluster
+cluster_stats = compute_cluster_stats(aggregated_data)
+print("Cluster Statistics:\n", cluster_stats)
+
+# Aggregate user total traffic per application
+application_data = user_traffic_per_app(data)
+
+# Derive the top 10 most engaged users per application
+top_users_per_app = top_users_per_application(application_data)
+
+# Plot the top 3 most used applications
+plot_top_apps(application_data)
+
+# Determine the optimized value of k using the elbow method
+features_for_scaling = ['session_frequency', 'total_duration', 'total_download', 'total_upload']
+if 'cluster' in aggregated_data.columns:
+    aggregated_data = aggregated_data.drop(columns=['cluster'])
+normalized_data = scaler.transform(aggregated_data[features_for_scaling])
+inertia = elbow_method(normalized_data, max_k=10)
+
+# Interpret the findings
+optimal_k = 3  # Based on the elbow plot
+print(f"The optimal number of clusters is {optimal_k}")
+
+# Re-run K-Means clustering with optimized k
+aggregated_data, scaler, kmeans = normalize_and_cluster(aggregated_data, n_clusters=optimal_k)
+
+# Compute and interpret cluster statistics
+cluster_stats = compute_cluster_stats(aggregated_data)
+print("Cluster Statistics with Optimized k:\n", cluster_stats)
