@@ -1,3 +1,5 @@
 telvenv/
 data/
 .env
+.idea
+__pycache__/
